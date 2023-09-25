@@ -1,4 +1,13 @@
-<!DOCTYPE html>
+<!-- to log into the database navigate to c:\xampp\mysql\bin and run the command '.\mysql -u root -p ' -->
+<?php 
+
+
+if(isset($_POST['sessionpredictor']))  {
+    $_SESSION["sessionpredictor"]=$_POST['sessionpredictor'];
+    $predictor=$_POST['sessionpredictor'];
+ ?>
+ 
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -36,32 +45,74 @@ if ($conn->connect_error) die("Fatal Error");
 $sql = "SELECT * FROM `tournament` Order by IDTournament Desc";
 $all_tournaments = mysqli_query($conn,$sql);
 
-$sql = "SELECT Distinct LeagueName FROM `league`";
+$sql = "SELECT * FROM `league`";
 $all_leagues = mysqli_query($conn,$sql);
 
-$sql = "SELECT * FROM `predictor`";
-$all_predictors = mysqli_query($conn,$sql);
+
+$predictor=$_POST['sessionpredictor'];
+$getpredictorname = "SELECT * FROM `predictor` Where idpredictor = $predictor";
+
+$getpredictornameresults = $conn->query($getpredictorname);
+$row = $getpredictornameresults->fetch_array(MYSQLI_NUM);
+$predictorname = htmlspecialchars($row[1]);
 
 $sql = "SELECT * FROM `prediction`";
 $all_predictions = mysqli_query($conn,$sql);
 
-?>
 
-<form action="testpage.php" method="post" id="submitform" >
+$getunreadmessages = "Select Case When Count(*) > 0 Then 'Message Board' Else 'Message Board' End as UnreadMessages,
+Case When Count(*) > 0 Then 'btn btn-primary' Else '' End as UnreadMessageIndicator
+From messageboard m Left Join (
+Select * From readmessages Where IDPredictor = $predictor ) r on m.IDMessage = r.IDMessage
+Where r.IDMessage is Null;";
+
+$unreadmessagesresult = $conn->query($getunreadmessages);
+$row = $unreadmessagesresult->fetch_array(MYSQLI_NUM);
+$unreadmessages = htmlspecialchars($row[0]);
+$styling = htmlspecialchars($row[1]);
+?>
+<form action="Predictions.php" method="post" id="submitform" >
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
 <input type="submit" value="Admin Tools" name="AdminTools" >
 <input type="submit" value="Tournament Management" name="TournamentManagementTools">
 <input type="submit" value="Prediction Page" name="PredictionTools">
 <input type="submit" value="Results Page" name="ResultsPage">
 </form> 
+<form id='messageboard' method='post' action="messageboard.php">
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
+<input type='submit' name='GoToMessageBoard' class="<?php echo $styling ?>" value='<?php echo $unreadmessages ?>'>
+    </form>
+
+
+
+<select name="LeagueDisplay" form="addtournamentdetails">
+<?php
+// use a while loop to fetch data
+// from the $all_categories variable
+// and individually display as an option
+while ($leagueTable = mysqli_fetch_array(
+        $all_leagues,MYSQLI_ASSOC)):;
+?>
+<option value="<?php echo $leagueTable["IDLeague"];
+    // The value we usually set is the primary key
+?>">
+    <?php echo $leagueTable["LeagueName"];
+        // To show the category name to the user
+    ?>
+</option>
+<?php
+endwhile;
+// While loop must be terminated
+?>
+</select> 
 
 
 <?php
-
 if(isset($_POST['ResultsPage'])) {
-echo "Results page !";
-var_dump($_POST);
 ?>
-<select name="TournamentDisplay" form='submitform'>
+<select name="IDTournament" form='submitform'>
 <?php
 // use a while loop to fetch data
 // from the $all_categories variable
@@ -87,7 +138,7 @@ endwhile;
 
 
 if(isset($_POST['ShowResults'])) {
-    $tournament = ($_POST['TournamentDisplay']);
+    $tournament = ($_POST['IDTournament']);
     $gettournamentname = "Select Name, Favourites From tournament Where IDTournament = $tournament";
     $gettournamentnameresults = $conn->query($gettournamentname);
     $row = $gettournamentnameresults->fetch_array(MYSQLI_NUM);
@@ -141,12 +192,14 @@ if(isset($_POST['ShowResults'])) {
         , Case When f.Winner = f.Michael Then (Case When f.Upsetfactor = 2 Then f.UpsetPick Else f.FavouritePick End) Else f.WrongPick End as MichaelColour
         , Case When f.Winner = f.Paula Then (Case When f.Upsetfactor = 2 Then f.UpsetPick Else f.FavouritePick End) Else f.WrongPick End as PaulaColour
         , Case When f.Winner = f.Mom Then (Case When f.Upsetfactor = 2 Then f.UpsetPick Else f.FavouritePick End) Else f.WrongPick End as MomColour
+        , Case When UpsetFactor = 1 Then 'p-3 mb-2 bg-primary text-white' Else 'p-3 mb-2 bg-primary text-warning' End as WinnerColour
         , f.Mom
         , f.Ian
         , f.Michael
         , f.Paula
         , f.Winner
         , f.Upsetfactor
+        , f.Matchup
         From (
         Select Max(Case When v.Name = 'Mom' Then v.Prediction Else Null End) as Mom
         ,Max(Case When v.Name = 'Ian' Then v.Prediction Else Null End) as Ian
@@ -158,6 +211,7 @@ if(isset($_POST['ShowResults'])) {
         , 'p-3 mb-2 bg-success text-warning' as UpsetPick
         , 'p-3 mb-2 bg-success text-white' as FavouritePick
         , 'p-3 mb-2 bg-danger text-white' as WrongPick
+        , 'p-3 mb-2 bg-danger text-white' as WinnerUpset
         From (SELECT  m.IDMatchup as Matchup, p.Name
         , Concat(pp.FirstName,' ',pp.LastName) as Prediction
         , Concat(pw.FirstName,' ',pw.LastName) as Winner 
@@ -167,11 +221,12 @@ if(isset($_POST['ShowResults'])) {
         Join predictor p on pr.IDPredictor = p.IDPredictor
         Join participant pp on pp.IDParticipant = pr.IDWinner
         Join participant pw on pw.IDParticipant = (Case When m.FavouriteScore > m.UnderdogScore Then IDFavourite Else IDUnderdog End)
-        Where m.IDTournament = $tournament ) v
-        Group by v.Winner, v.UpsetFactor
+        Where m.IDTournament = $tournament) v
+        Group by v.Winner, v.UpsetFactor, v.matchup
         , 'p-3 mb-2 bg-success text-warning'
         , 'p-3 mb-2 bg-success text-white'
         , 'p-3 mb-2 bg-danger text-white'
+        , 'p-3 mb-2 bg-primary text-warning'
         ) f Order by f.Matchup";
 
     } else {
@@ -229,11 +284,12 @@ if(isset($_POST['ShowResults'])) {
         <h2 class="pull-left">Results Table</h2>
         <table class='table table-bordered table-striped'>
         <tr>
-        <td width='20%'>Mom</td>
-        <td width='20%'>Michael</td>
-        <td width='20%'>Paula</td>
-        <td width='20%'>Ian</td>
-        <td width='20%'>Winner</td>
+        <td width='10%'>Matchup</td>
+        <td width='15%'>Mom</td>
+        <td width='15%'>Michael</td>
+        <td width='15%'>Paula</td>
+        <td width='15%'>Ian</td>
+        <td width='15%'>Winner</td>
         </tr>
         </table>
         <?php
@@ -242,11 +298,12 @@ if(isset($_POST['ShowResults'])) {
             ?>
             <table class='table table-bordered table-striped'>
             <tr>
-            <td width='20%' class='<?php echo $row["MomColour"]?>'><?php echo $row["Mom"]; ?></td>
-            <td width='20%' class='<?php echo $row["MichaelColour"]?>'><?php echo $row["Michael"]; ?></td>
-            <td width='20%' class='<?php echo $row["PaulaColour"]?>'><?php echo $row["Paula"]; ?></td>
-            <td width='20%' class='<?php echo $row["IanColour"]?>'><?php echo $row["Ian"]; ?></td>
-            <td width='20%' class="p-3 mb-2 bg-primary text-white"><?php echo $row["Winner"]; ?></td>
+            <td width='10%' class='<?php echo $row["WinnerColour"]?>'><?php echo $row["Matchup"]; ?></td>
+            <td width='15%' class='<?php echo $row["MomColour"]?>'><?php echo $row["Mom"]; ?></td>
+            <td width='15%' class='<?php echo $row["MichaelColour"]?>'><?php echo $row["Michael"]; ?></td>
+            <td width='15%' class='<?php echo $row["PaulaColour"]?>'><?php echo $row["Paula"]; ?></td>
+            <td width='15%' class='<?php echo $row["IanColour"]?>'><?php echo $row["Ian"]; ?></td>
+            <td width='15%' class='<?php echo $row["WinnerColour"]?>'><?php echo $row["Winner"]; ?></td>
             </tr>
             <?php
             $i++;
@@ -312,8 +369,6 @@ if(isset($_POST['ShowResults'])) {
 }
 
 if(isset($_POST['matchupforprediction'])) {
-    echo "Matchup for Predictions";
-    var_dump($_POST);
     $predictor = ($_POST['PredictorDisplay']);
     $matchupforprediction = ($_POST['IDMatchup']);
     $showmatchupforprediction = "SELECT Substring(IDMatchup,Locate('-',IDMatchup)+1,Length(IDMatchup))
@@ -334,8 +389,7 @@ if(isset($_POST['matchupforprediction'])) {
                     JOIN participant p2 on matchup.IDUnderdog = p2.IDParticipant  
                     JOIN tournament t on matchup.IDTournament = t.IDTournament Where IDMatchup = '$matchupforprediction' 
                     Order by IDMatchup";
-    // var_dump($showmatchupforprediction);
-    // die();
+
     $matchuplistforprediction = $conn->query($showmatchupforprediction);
     if (!$matchuplistforprediction) die("Select From matchup access failed");
     $rows = $matchuplistforprediction->num_rows;
@@ -360,6 +414,8 @@ if(isset($_POST['matchupforprediction'])) {
     <pre>
     </pre>
     <form action='savePrediction.php' method='post' id='submitprediction'>
+    <input type="hidden" value="$predictor" name="sessionpredictor">
+    <input type="hidden" value="$predictorname" name="sessionpredictorname">
     <input type='hidden' name='idmatchup' value='$r10'>
     $r0 
     <input type='text' name='fseed' value='$r8'>
@@ -388,15 +444,10 @@ if(isset($_POST['matchupforprediction'])) {
 
 
 if(isset($_POST['populatematch'])) {
-    var_dump($_POST);
-    die();
     $participant =  ($_POST['IDFavourite']);
     $opponent =  ($_POST['IDUnderdog']);
     $matchup =  ($_POST['IDMatchup']);
-    $newmatchup =  ($_POST['IDNextMatchup']);
     if(isset($_POST['Favourites'])) {
-    $tournamentrounds =  ($_POST['rounds']);
-    $favourites =  ($_POST['Favourites']);
     }
     $tournament = substr($matchup,0,2);
     $round = intval(substr($matchup,stripos($matchup, '-')+1,1));
@@ -404,15 +455,13 @@ if(isset($_POST['populatematch'])) {
     $currentslot = intval(substr($matchup,strrpos($matchup, '-')+2,1));
 
 
-
-    $nextslot = (intval($currentslot) % 2 == 0)  ? intval($currentslot) / 2 : (intval($currentslot) + 1) / 2;
-  
+    // $newmatchup = (intval($currentslot) % 2 == 0)  ? intval($currentslot) / 2 : (intval($currentslot) + 1) / 2;
+ 
     $insertparticipant = "UPDATE matchup Set IDFavourite = $participant, IDUnderdog = $opponent Where IDMatchup = '$matchup'";
     $insertparticipantresult = $conn->query($insertparticipant);
 
-
-
-
+    // $defaultfavourite = "UPDATE prediction Set IDWinner = $participant Where IDMatchup = '$matchup'";
+    // $defaultfavouriteresult = $conn->query($defaultfavourite);
     
     if(isset($_POST['FavouriteSeeding'])) {
         $favouriteseed = ($_POST['FavouriteSeeding']);              
@@ -423,6 +472,7 @@ if(isset($_POST['populatematch'])) {
     if(isset($_POST['favouritescore'])) {
         $favouritescore = ($_POST['favouritescore']); 
         $underdogscore = ($_POST['underdogscore']); 
+        $favourites =  ($_POST['Favourites']);
         $insertscore = "UPDATE matchup Set FavouriteScore = $favouritescore, UnderdogScore = $underdogscore Where IDMatchup= '$matchup'";
         $insertscoreresult = $conn->query($insertscore);
 
@@ -441,11 +491,11 @@ if(isset($_POST['populatematch'])) {
         (Case When matchup.FavouriteScore < matchup.UnderdogScore Then matchup.IDUnderdog Else matchup.IDFavourite End) 
         Then matchup.Round Else 0 End) * Case When matchup.FavouriteScore < matchup.UnderdogScore Then 2 Else 1 End
         Where prediction.IDMatchup = '$matchup';";
-        $defaultfavpick = "Update prediction p
-        Join matchup m on p.IDMatchup = matchup.IDMatchup
-        Set IDWinner = matchup.IDFavourite
-        Where matchup.IDmatchup = '$matchup'";
-        $defaultfavpickresult = $conn->query($defaultfavpick);
+        // $defaultfavpick = "Update prediction p
+        // Join matchup m on p.IDMatchup = matchup.IDMatchup
+        // Set IDWinner = matchup.IDFavourite
+        // Where matchup.IDmatchup = '$matchup'";
+        // $defaultfavpickresult = $conn->query($defaultfavpick);
         }
         $updatepointsresult = $conn->query($updatepoints);
 
@@ -454,18 +504,24 @@ if(isset($_POST['populatematch'])) {
         $winner = ($favouritescore > $underdogscore) ? $participant : $opponent;
         $winnerseeding  = ($favouritescore > $underdogscore) ? $favouriteseed : $underdogseed;  
         if($favouritescore > 0 || $underdogscore > 0) {
+            
+        $newmatchup =  ($_POST['IDNextMatchup']);
             $getseed = "SELECT IDFavourite, FavouriteScore, FavouriteSeeding From matchup Where IDMatchup = '$newmatchup' and IDFavourite is not Null";
+
 
             $seedlist = $conn->query($getseed);
             $row = $seedlist->fetch_array(MYSQLI_NUM);
-            if (empty($row) && $nextround <= $tournamentrounds)
+            $tournamentrounds =  ($_POST['rounds']);
+            if (empty($row))
             {
                 echo "No next seed";
                 $insertwinner = "Update matchup 
                 Set IDFavourite = $winner, FavouriteSeeding = $winnerseeding
                 Where IDMatchup = '$newmatchup'";
                 $insertwinnerresult = $conn->query($insertwinner); 
-            }  else {
+            $defaultfavourite = "UPDATE prediction Set IDWinner = $winner Where IDMatchup = '$newmatchup'";
+            $defaultfavouriteresult = $conn->query($defaultfavourite);
+            }  elseif ($nextround <= $tournamentrounds) {
                 $foundseeding = $row[2];
                 echo "Next seed found : ";
                 if ($foundseeding >= $winnerseeding) {
@@ -479,6 +535,8 @@ if(isset($_POST['populatematch'])) {
                     Where IDMatchup =  '$newmatchup'";       
                     var_dump("Insert Winner after PFIU ".$insertwinner);
                     $insertwinnerresult = $conn->query($insertwinner); 
+                    $defaultfavourite = "UPDATE prediction Set IDWinner = $winner Where IDMatchup = '$newmatchup'";
+                    $defaultfavouriteresult = $conn->query($defaultfavourite);
                 }
                 else {
                     echo "Found seed worse";
@@ -497,61 +555,20 @@ if(isset($_POST['populatematch'])) {
 }
 
 if(isset($_POST['GetInfoForPredictions'])) {
-    echo "Get Tournament for Prediction";
-    var_dump($_POST);
-    $tournament = $_POST['TournamentDisplay'];
-    $showmatchups = "SELECT * From matchup Where IDTournament = $tournament";
+    $tournament = $_POST['IDTournament'];
+    $showmatchups = "SELECT * From matchup Where IDTournament = $tournament and FavouriteScore is Null and UnderdogScore is Null";
     $all_matchups = mysqli_query($conn, $showmatchups);
     ?>
     <br>
     
-<select name="PredictorDisplay" form='submitform'>
-    <?php
-    // use a while loop to fetch data
-    // from the $all_categories variable
-    // and individually display as an option
-    while ($predictorTable = mysqli_fetch_array(
-            $all_predictors,MYSQLI_ASSOC)):;
-?>
-    <option value="<?php echo $predictorTable["IDPredictor"];
-        // The value we usually set is the primary key
-    ?>">
-        <?php echo $predictorTable["Name"];
-            // To show the category name to the user
-        ?>
-    </option>
-<?php
-    endwhile;
-    // While loop must be terminated
-?>
-</select> 
+<form action="changelabeltext.php" method="post" id="RegisterPrediction" >
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
+<input type='submit' form='RegisterPrediction' name='matchupforprediction' value='Click for Flip Predictions Page' >
+<input type ='hidden' name='tournament' form='RegisterPrediction' value= <?php echo $tournament ?>></form>
+<h1>Available Matches:  <?php echo $predictorname ?></h1>
 
-<select name="IDMatchup" form='submitform'>
 <?php
-// use a while loop to fetch data
-// from the $all_categories variable
-// and individually display as an option
-while ($matchups = mysqli_fetch_array(
-        $all_matchups,MYSQLI_ASSOC)):;
-?>
- <option value="<?php echo $matchups["IDMatchup"];
-    // The value we usually set is the primary key
-?>">
-    <?php echo $matchups["IDMatchup"];
-        // To show the category name to the user
-    ?>
-</option>
-<?php
-endwhile;
-// While loop must be terminated
-?>
-</select> 
-<input type='submit' form='submitform' name='matchupforprediction' value='Get matchup for prediction' >
-<input type ='hidden' name='test' form='getpredictions' value='test'>
-<?php
-
-
-
 
 
 if(isset($_POST['IDMatchup'])) {
@@ -571,6 +588,7 @@ if(isset($_POST['IDMatchup'])) {
     , IDUnderdog
     FROM matchup JOIN participant on matchup.IDFavourite = participant.IDParticipant 
                     JOIN participant p2 on matchup.IDUnderdog = p2.IDParticipant  Where IDMatchup = '$matchupforprediction' 
+                    and matchup.FavouriteScore is Null and matchup.UnderdogScore is Null
                     Order by IDMatchup";
     
     $matchuplistforprediction = $conn->query($showmatchupforprediction);
@@ -595,13 +613,15 @@ if(isset($_POST['IDMatchup'])) {
     <pre>
     </pre>
     <form action='savePrediction.php' method='post' id='submitprediction'>
+    <input type="hidden" value="$predictor" name="sessionpredictor">
+    <input type="hidden" value="$predictorname" name="sessionpredictorname">
     <input type='hidden' name='idmatchup' value='$r10'>
     $r0 
     <input type='text' name='fseed' value='$r8'>
     <input type='text' name='Favourite' value='$r3'>
     <input type='hidden' name='idFavourite' value='$r11'>
     <input type='radio' name='predicted' value=Favourite>
-        <select name="numberofgames">
+        <select name="numberofgames" $r13>
         <option value="4">4</option>
         <option value="5">5</option>
         <option value="6">6</option>
@@ -635,7 +655,8 @@ if(isset($_POST['IDMatchup'])) {
     , IDFavourite
     , IDUnderdog
     FROM matchup JOIN participant on matchup.IDFavourite = participant.IDParticipant 
-                    JOIN participant p2 on matchup.IDUnderdog = p2.IDParticipant  Where IDTournament = $tournament Order by IDMatchup";
+                    JOIN participant p2 on matchup.IDUnderdog = p2.IDParticipant  Where IDTournament = $tournament 
+                    and matchup.FavouriteScore is Null and matchup.UnderdogScore is Null Order by IDMatchup";
     
     $matchuplist = $conn->query($showmatchups);
     if (!$matchuplist) die("Select From matchup access failed");
@@ -716,12 +737,29 @@ if (!empty($_POST['Tournament'])
     //Create lines in Results table to be filled later
 }
 
+// Begin redirect to the Message Board page
+
+if(isset($_POST['MessageBoard'])) {
+?>
+    <form id='messageboard' method='post' action="messageboard.php">
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
+<input type='submit' name='GoToMessageBoard' value='Go to Message Board'>
+    </form>
+
+<?php
+}
+
+// End redtirect to the Message Board page
+
 if(isset($_POST['PredictionTools'])) {
 
     ?>
-    <form id='getpredictions' method='post' action="testpage.php">
+    <form id='getpredictions' method='post' action="changelabeltext.php">
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
     </form>
-<select name="TournamentDisplay" form='getpredictions'>
+<select name="IDTournament" form='getpredictions'>
 <?php
 // use a while loop to fetch data
 // from the $all_categories variable
@@ -748,7 +786,7 @@ endwhile;
 
 
 if(isset($_POST['GetTournamentMatchups'])) {
-    $tournament = $_POST['TournamentDisplay'];
+    $tournament = $_POST['IDTournament'];
     $getleagues = "SELECT Distinct IDLeagueType from tournament Where IDTournament = $tournament";
     $league = $conn->query($getleagues);
     if (!$getleagues) die("Select From matchup access failed");
@@ -766,7 +804,9 @@ $all_favourites = mysqli_query($conn,$getfavourites);
 $getunderdogs = "SELECT * From participant Where IDLeagueType = $league Order by FirstName";
 $all_underdogs = mysqli_query($conn,$getunderdogs);
 
+?>
 
+<?php
     echo  "Register Scores";
     ?>
     <br>     
@@ -891,7 +931,9 @@ Seeding <input type="text" name="UnderdogSeeding" form='submitform'>
         $p14 = htmlspecialchars($row[14]);// Rounds
         $p15 = htmlspecialchars($row[15]);// Favourites
         echo <<<_END
-    <form action='testpage.php' method='post' form='submitform'>
+    <form action='Predictions.php' method='post' form='submitform'>
+    <input type="hidden" value="$predictor" name="sessionpredictor">
+    <input type="hidden" value="$predictorname" name="sessionpredictorname">
     $p0
     <input type='hidden' value='$p8' name='FavouriteSeeding'>
     <input type='hidden' value='$p13' name='IDNextMatchup'>
@@ -926,9 +968,12 @@ if(isset($_POST['AdminTools'])) {
 $sql = "SELECT * FROM `league`";
 $all_leagues = mysqli_query($conn,$sql);
 
+$predictor=$_POST['sessionpredictor'];
 
 echo <<<_END
-<form action="testpage.php" method="post" id="addtournamentdetails">
+<form action="Predictions.php" method="post" id="addtournamentdetails">
+<input type="hidden" value=$predictor name="sessionpredictor">
+<input type="hidden" value=$predictorname name="sessionpredictorname">
 <pre>
 Name <input type="text" name="Name"> <input type="submit" value="Add New Predictor" name="CreatePredictor" >
 League <input type="text" name="League"> <input type="submit" value="Add New League" name="CreateLeague">
@@ -1021,6 +1066,45 @@ if(isset($_POST['ShowLeagues'])) {
 }
 // Admin → Show Leagues — END
 
+// Admin → Show Tournaments — BEGIN
+if(isset($_POST['ShowTournaments'])) {
+    
+    $gettournaments = "SELECT 
+    Name
+    From tournament
+    Order by Name";
+    $tournamentlist = mysqli_query($conn,$gettournaments);
+
+      if (mysqli_num_rows($tournamentlist) > 0) {
+    ?> 
+    
+    <h2 class="pull-left">List of Tournaments</h2>
+    <table class='table table-bordered table-striped'>
+    <tr>
+    <td class="btn btn-primary">Name</td>
+    <td class="btn btn-primary">Action</td>
+    </tr>
+    <?php
+    $i=0;
+    while($row = mysqli_fetch_array($tournamentlist)) {
+    ?>
+    <tr>
+    <td><?php echo $row["Name"]; ?></td>
+    <td><input type='submit' value='Delete'></td> 
+    </tr>
+    <?php
+    $i++;
+    }
+    ?>
+    </table>
+    <?php
+    }
+    else{
+    echo "No result found";
+    }
+}
+// Admin → Show Tournaments — END
+
 // Admin → Show Participants — BEGIN
 if(isset($_POST['ShowParticipants']) || isset($_POST['ShowParticipantsFromLeague'])) {
 
@@ -1063,7 +1147,7 @@ if(isset($_POST['ShowParticipants']) || isset($_POST['ShowParticipantsFromLeague
 
 if(isset($_POST['TournamentManagementTools'])) {
 ?>
-<select name="TournamentDisplay" form='submitform'>
+<select name="IDTournament" form='submitform'>
 <?php
 // use a while loop to fetch data
 // from the $all_categories variable
@@ -1084,6 +1168,8 @@ endwhile;
 ?>
 </select> 
 <input type="submit" name="GetTournamentMatchups" form='submitform' value='Get Tournament'>
+<input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
+<input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
 
 <?php
     }
@@ -1101,9 +1187,11 @@ if(isset($_POST['CreatePredictor'])) {
 if(isset($_POST['CreateParticipant'])) {
     $firstname = get_post($conn, 'FirstName');
     $lastname = get_post($conn, 'LastName');
+    $firstname = Trim($firstname);
+    $lastname = Trim($lastname);
     $idleague = get_post($conn, 'LeagueDisplay');
-    $insertparticipant = "INSERT INTO Participant (FirstName, LastName, IDLeagueType) VALUES" .
-    "(Trim('$firstname'), Trim('$lastname'), '$idleague')";
+    $insertparticipant = "INSERT INTO participant (FirstName, LastName, IDLeagueType) VALUES" .
+    "('$firstname', '$lastname', '$idleague')";
     $insertparticipantresult = $conn->query($insertparticipant);
     if (!$insertparticipantresult) echo "INSERT failed<br><br>";
     }
@@ -1118,10 +1206,6 @@ if(isset($_POST['CreateLeague'])) {
     }
     
     
-    function get_post($conn, $var)
-{
-    return $conn->real_escape_string($_POST[$var]);
-}
 ?>
 </div>
 </div>        
@@ -1129,3 +1213,13 @@ if(isset($_POST['CreateLeague'])) {
 </div>
 </body>
 </html>
+<?php
+
+} else {
+    header("Location: OpenSession.php");
+}
+
+function get_post($conn, $var)
+{
+    return $conn->real_escape_string($_POST[$var]);
+}
