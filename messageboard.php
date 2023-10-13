@@ -27,24 +27,29 @@ if ($conn->connect_error) die("Fatal Error");
 
     $predictor=$_POST['sessionpredictor'];
     $message = get_post($conn, 'Message');
-    $getpredictorname = "SELECT * FROM `predictor` Where idpredictor = $predictor";
+ 
+    if(!empty($message))
+    {
 
-    $addnewmessage = "INSERT INTO messageboard (Message, IDPredictor) VALUES" .
-    "('$message', '$predictor')";
-    $addnewmessageresult = $conn->query($addnewmessage);
-    if (!$addnewmessageresult) echo "INSERT failed<br><br>";
+        $getpredictorname = "SELECT * FROM `predictor` Where idpredictor = $predictor";
 
-    // Get ID of message just added
-    $getmessageid = "SELECT Max(IDMessage) as messageid From messageboard";
-    $getmessageidresults = $conn->query($getmessageid);
-    $row = $getmessageidresults->fetch_array(MYSQLI_NUM);
-    $idmessage = htmlspecialchars($row[0]);
-    // Insert the message the user just added to readmessages
-    $insertreadmessages = "INSERT INTO readmessages (IDMessage, IDPredictor) VALUES " .
-    "($idmessage, $predictor)";
-
-    $result = $conn->query($insertreadmessages);
-    if (!$result) echo "Mark as Read failed<br><br>";
+        $addnewmessage = "INSERT INTO messageboard (Message, IDPredictor) VALUES" .
+        "('$message', '$predictor')";
+        $addnewmessageresult = $conn->query($addnewmessage);
+        if (!$addnewmessageresult) echo "INSERT failed<br><br>";
+    
+        // Get ID of message just added
+        $getmessageid = "SELECT Max(IDMessage) as messageid From messageboard";
+        $getmessageidresults = $conn->query($getmessageid);
+        $row = $getmessageidresults->fetch_array(MYSQLI_NUM);
+        $idmessage = htmlspecialchars($row[0]);
+        // Insert the message the user just added to readmessages
+        $insertreadmessages = "INSERT INTO readmessages (IDMessage, IDPredictor) VALUES " .
+        "($idmessage, $predictor)";
+    
+        $result = $conn->query($insertreadmessages);
+        if (!$result) echo "Mark as Read failed<br><br>";
+    }
     }
 
 
@@ -61,6 +66,7 @@ if(isset($_POST['sessionpredictor'])) {
     $row = $getpredictornameresults->fetch_array(MYSQLI_NUM);
     $predictorname = htmlspecialchars($row[1]);
 
+    $admin = $predictor != 28 ? 'hidden' : '';
     ?>
 
     <!DOCTYPE html>
@@ -83,8 +89,8 @@ if(isset($_POST['sessionpredictor'])) {
 <body>
 
 <form action="Predictions.php" method="post" id="submitform" >
-<input type="submit" value="Admin Tools" name="AdminTools" >
-<input type="submit" value="Tournament Management" name="TournamentManagementTools">
+<input type="submit" <?php echo $admin ?> value="Admin Tools" name="AdminTools" >
+<input type="submit"  <?php echo $admin ?> value="Tournament Management" name="TournamentManagementTools">
 <input type="submit" value="Prediction Page" name="PredictionTools">
 <input type="submit" value="Results Page" name="ResultsPage">
 <input type="hidden" name='sessionpredictor' value=<?php echo $predictor ?>>
