@@ -1,6 +1,7 @@
 <!-- to log into the database navigate to c:\xampp\mysql\bin and run the command '.\mysql -u root -p ' -->
 <?php 
-
+// var_dump($_POST);
+// die();
 
 if(isset($_POST['sessionpredictor']))  {
     $_SESSION["sessionpredictor"]=$_POST['sessionpredictor'];
@@ -42,6 +43,7 @@ require_once 'login.php';
 $conn = new mysqli($hn, $un, $pw, $db);
 if ($conn->connect_error) die("Fatal Error");
 
+
 $sql = "SELECT * FROM `tournament` Order by IDTournament Desc";
 $all_tournaments = mysqli_query($conn,$sql);
 
@@ -55,6 +57,9 @@ $getpredictorname = "SELECT * FROM `predictor` Where idpredictor = $predictor";
 $getpredictornameresults = $conn->query($getpredictorname);
 $row = $getpredictornameresults->fetch_array(MYSQLI_NUM);
 $predictorname = htmlspecialchars($row[1]);
+
+$hide = ($predictorname == 'Ian') ? " " : "hidden";
+
 
 $sql = "SELECT * FROM `prediction`";
 $all_predictions = mysqli_query($conn,$sql);
@@ -70,12 +75,15 @@ $unreadmessagesresult = $conn->query($getunreadmessages);
 $row = $unreadmessagesresult->fetch_array(MYSQLI_NUM);
 $unreadmessages = htmlspecialchars($row[0]);
 $styling = htmlspecialchars($row[1]);
+
+//Show admin tools to admi1n only
+
 ?>
 <form action="Predictions.php" method="post" id="submitform" >
 <input type="hidden" value="<?php echo $predictor ?>" name="sessionpredictor">
 <input type="hidden" value="<?php echo $predictorname ?>" name="sessionpredictorname">
-<input type="submit" value="Admin Tools" name="AdminTools" >
-<input type="submit" value="Tournament Management" name="TournamentManagementTools">
+<input type="submit" <?php echo $hide ?> value="Admin Tools" name="AdminTools" >
+<input type="submit" <?php echo $hide ?> value="Tournament Management" name="TournamentManagementTools">
 <input type="submit" value="Prediction Page" name="PredictionTools">
 <input type="submit" value="Results Page" name="ResultsPage">
 </form> 
@@ -108,8 +116,9 @@ endwhile;
 ?>
 </select> 
 
-
 <?php
+
+
 if(isset($_POST['ResultsPage'])) {
 ?>
 <select name="IDTournament" form='submitform'>
@@ -136,7 +145,6 @@ endwhile;
 <?php
 }
 
-
 if(isset($_POST['ShowResults'])) {
     $tournament = ($_POST['IDTournament']);
     $gettournamentname = "Select Name, Favourites From tournament Where IDTournament = $tournament";
@@ -145,7 +153,6 @@ if(isset($_POST['ShowResults'])) {
     $tournamentname = htmlspecialchars($row[0]);
     $favourites = htmlspecialchars($row[1]);
     // $hidden = $favourites == 'Yes' ? 'invisible' : 'visible';
-
     $getlearderboard = "SELECT 
     pr.Name
     ,Sum(p.Points) as Points
@@ -156,6 +163,7 @@ if(isset($_POST['ShowResults'])) {
     WHERE t.IDTournament = $tournament
     Group by pr.Name
     Order by Sum(p.Points) Desc, pr.Name;";
+    var_dump($getlearderboard);
     $leaderboard = mysqli_query($conn,$getlearderboard);
 
     if (mysqli_num_rows($leaderboard) > 0) {
@@ -421,7 +429,7 @@ if(isset($_POST['matchupforprediction'])) {
     <input type='text' name='fseed' value='$r8'>
     <input type='text' name='Favourite' value='$r3'>
     <input type='hidden' name='idFavourite' value='$r11'>
-    <input type='radio' name='predicted' value=Favourite>
+    <input type='radio' name="predicted" value=$r11>
         <select name="numberofgames" $r13>
         <option value="4">4</option>
         <option value="5">5</option>
@@ -434,7 +442,7 @@ if(isset($_POST['matchupforprediction'])) {
     <input type='text' name='Underdog' value='$r4'>
     <input type='hidden' name='IDUnderdog' value='$r12'> 
     <input type='hidden' name='PredictorDisplay' value='$predictor'> 
-    <input type='radio' name='predicted' value=Underdog>
+    <input type='radio' name="predicted" value=$r12>
     <input type='submit' name = 'prediction' value='Submit Prediction'>
     <br>     
     _END;
@@ -692,7 +700,6 @@ if(isset($_POST['IDMatchup'])) {
     }
     $matchuplist->close();
     
-    die();
 }
 
 
@@ -784,7 +791,6 @@ endwhile;
 
 }
 
-
 if(isset($_POST['GetTournamentMatchups'])) {
     $tournament = $_POST['IDTournament'];
     $getleagues = "SELECT Distinct IDLeagueType from tournament Where IDTournament = $tournament";
@@ -808,10 +814,10 @@ $all_underdogs = mysqli_query($conn,$getunderdogs);
 
 <?php
     echo  "Register Scores";
+
     ?>
     <br>     
    
-
     
 <select name="IDMatchup" form='submitform'>
 <?php
@@ -958,7 +964,6 @@ Seeding <input type="text" name="UnderdogSeeding" form='submitform'>
     _END;
     }
     $matchuplist->close();
-    die();
 }
 
 
