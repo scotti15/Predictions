@@ -76,6 +76,7 @@ $row = $unreadmessagesresult->fetch_array(MYSQLI_NUM);
 $unreadmessages = htmlspecialchars($row[0]);
 $styling = htmlspecialchars($row[1]);
 
+
 //Show admin tools to admi1n only
 
 ?>
@@ -118,6 +119,12 @@ endwhile;
 
 <?php
 
+if(isset($_POST['SubmitStartTime'])) {
+
+var_dump($_POST);
+echo"Made it here";
+}
+//die();
 
 if(isset($_POST['ResultsPage'])) {
 ?>
@@ -163,7 +170,7 @@ if(isset($_POST['ShowResults'])) {
     WHERE t.IDTournament = $tournament
     Group by pr.Name
     Order by Sum(p.Points) Desc, pr.Name;";
-    var_dump($getlearderboard);
+    // var_dump($getlearderboard);
     $leaderboard = mysqli_query($conn,$getlearderboard);
 
     if (mysqli_num_rows($leaderboard) > 0) {
@@ -201,6 +208,7 @@ if(isset($_POST['ShowResults'])) {
         , Case When f.Winner = f.Paula Then (Case When f.Upsetfactor = 2 Then f.UpsetPick Else f.FavouritePick End) Else f.WrongPick End as PaulaColour
         , Case When f.Winner = f.Mom Then (Case When f.Upsetfactor = 2 Then f.UpsetPick Else f.FavouritePick End) Else f.WrongPick End as MomColour
         , Case When UpsetFactor = 1 Then 'p-3 mb-2 bg-primary text-white' Else 'p-3 mb-2 bg-primary text-warning' End as WinnerColour
+        , Case When f.FavouriteScore is Null Then 'p-3 mb-2 bg-secondary text-white' Else Case When UpsetFactor = 1 Then 'p-3 mb-2 bg-primary text-white' Else 'p-3 mb-2 bg-primary text-warning' End  End as MatchColour
         , f.Mom
         , f.Ian
         , f.Michael
@@ -220,10 +228,12 @@ if(isset($_POST['ShowResults'])) {
         , 'p-3 mb-2 bg-success text-white' as FavouritePick
         , 'p-3 mb-2 bg-danger text-white' as WrongPick
         , 'p-3 mb-2 bg-danger text-white' as WinnerUpset
+        , v.FavouriteScore
         From (SELECT  m.IDMatchup as Matchup, p.Name
         , Concat(pp.FirstName,' ',pp.LastName) as Prediction
         , Concat(pw.FirstName,' ',pw.LastName) as Winner 
-        , Case When m.FavouriteScore > m.UnderdogScore Then 1 Else 2 End as UpsetFactor  
+        , Case When m.FavouriteScore > m.UnderdogScore Then 1 Else 2 End as UpsetFactor
+        , m.FavouriteScore  
         FROM prediction pr
         Join matchup m on pr.IDMatchup = m.IDMatchup
         Join predictor p on pr.IDPredictor = p.IDPredictor
@@ -306,7 +316,7 @@ if(isset($_POST['ShowResults'])) {
             ?>
             <table class='table table-bordered table-striped'>
             <tr>
-            <td width='10%' class='<?php echo $row["WinnerColour"]?>'><?php echo $row["Matchup"]; ?></td>
+            <td width='10%' class='<?php echo $row["MatchColour"]?>'><?php echo $row["Matchup"]; ?></td>
             <td width='15%' class='<?php echo $row["MomColour"]?>'><?php echo $row["Mom"]; ?></td>
             <td width='15%' class='<?php echo $row["MichaelColour"]?>'><?php echo $row["Michael"]; ?></td>
             <td width='15%' class='<?php echo $row["PaulaColour"]?>'><?php echo $row["Paula"]; ?></td>
@@ -451,12 +461,14 @@ if(isset($_POST['matchupforprediction'])) {
 }
 
 
+
 if(isset($_POST['populatematch'])) {
     $participant =  ($_POST['IDFavourite']);
     $opponent =  ($_POST['IDUnderdog']);
     $matchup =  ($_POST['IDMatchup']);
     if(isset($_POST['Favourites'])) {
     }
+
     $tournament = substr($matchup,0,2);
     $round = intval(substr($matchup,stripos($matchup, '-')+1,1));
     $nextround = $round + 1;
@@ -737,7 +749,7 @@ if (!empty($_POST['Tournament'])
 
         }
     }
-    $populateprediction = "INSERT INTO prediction (IDMatchup, IDPredictor) SELECT IDMatchup, IDPredictor From matchup, predictor Where IDTournament = '$tournamentid'";
+    $populateprediction = "INSERT INTO prediction (IDMatchup, IDPredictor, IDWinner) SELECT IDMatchup, IDPredictor, IDFavourite From matchup, predictor Where IDTournament = '$tournamentid'";
     $populatepredictionresult = $conn->query($populateprediction);
     if (!$populatepredictionresult) echo "INSERT prediction failed<br><br>";
 
@@ -870,6 +882,7 @@ Seeding <input type="text" name="FavouriteSeeding" form='submitform'>
 <br> 
 
 Seeding <input type="text" name="UnderdogSeeding" form='submitform'> 
+    <input type='text' form='submitform' name='starttimevalue'>
 
 <select name="IDUnderdog" form='submitform'>
     <?php
@@ -917,7 +930,8 @@ Seeding <input type="text" name="UnderdogSeeding" form='submitform'>
                     Join tournament t on matchup.IDTournament = t.IDTournament  Where matchup.IDTournament = $tournament 
                     Order by IDMatchup";
     $matchuplist = $conn->query($showmatchups);
-    if (!$matchuplist) die("Select From matchup access failed");$rows = $matchuplist->num_rows;
+    if (!$matchuplist) die("Select From matchup access failed");
+    $rows = $matchuplist->num_rows;
     for ($j = 0; $j < $rows; ++$j) {
         $row = $matchuplist->fetch_array(MYSQLI_NUM);// 
         $p0 = htmlspecialchars($row[0]);// Matchup
@@ -938,8 +952,13 @@ Seeding <input type="text" name="UnderdogSeeding" form='submitform'>
         $p15 = htmlspecialchars($row[15]);// Favourites
         echo <<<_END
     <form action='Predictions.php' method='post' form='submitform'>
+    <br>
     <input type="hidden" value="$predictor" name="sessionpredictor">
     <input type="hidden" value="$predictorname" name="sessionpredictorname">
+    $p0
+    <input type='text' form='submitform' name='starttimevalue'>
+    <input type='submit' value='Start Time' name='SubmitStartTime' form='submitform'>
+    <br>
     $p0
     <input type='hidden' value='$p8' name='FavouriteSeeding'>
     <input type='hidden' value='$p13' name='IDNextMatchup'>
@@ -959,7 +978,7 @@ Seeding <input type="text" name="UnderdogSeeding" form='submitform'>
     <input type='hidden' name='rounds' value='$p14'>
     <input type='hidden' name='Favourites' value='$p15'>
     <input type='submit' value='Submit Scores' name='SubmitScores'>
-    <br>    
+    <br>
     </form> 
     _END;
     }

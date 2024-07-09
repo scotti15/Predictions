@@ -106,6 +106,7 @@ if(isset($_POST['sessionpredictor']))
         
         if ($favourites == 'Yes') 
             {
+                var_dump($_POST);
                 $getmatchups = "SELECT Substring(m.IDMatchup,Locate('-',m.IDMatchup)+1,Length(m.IDMatchup)) as Matchup
                 , Round
                 , IDTournament
@@ -155,12 +156,13 @@ if(isset($_POST['sessionpredictor']))
                         $r14 = htmlspecialchars($row[14]); // FavouriteStyle
                         $r15 = htmlspecialchars($row[15]); // UnderdogStyle
                         
-                        $left = $j % 4 * 450;
+                        $left = $j % 4 * 350;
                         $left = $left."px";
                         $top = ceil(($j+1) / 4) * 100;
                         $top = $top."px";
 
-                        
+                        $focus = $idmatchup == $r10 ? "autofocus" : ""; 
+
                         echo <<<_END
                         <pre></pre>
                         <div style= "position: absolute; top: $top; left: $left;">
@@ -170,12 +172,14 @@ if(isset($_POST['sessionpredictor']))
                                 <input type='hidden' name='idmatchup' value='$r10'>
                                 <input type='hidden' name='IDTournament' value='$tournament'>
                                 <input type='hidden' name='PredictorDisplay' value='$idpredictor'>
-                                <input type='text' style='width:40px' value='$r8'>
+                                <input type='text' style='width:40px' value='$r8' $focus> 
                                 <input type='text' style='width:240px; $r14' value='$r3'>
-                                <input type='submit' value='Flip My Pick !'>
                                 <br>
                                 <input type='text' style='width:40px' value='$r9'>
                                 <input type='text' style='width:240px; $r15' value='$r4'>
+                                <br>
+                                <input type='submit' value='Flip My Pick !'>
+                                <br>
                             </form>
                         </div>
                         _END;
@@ -269,6 +273,7 @@ if(isset($_POST['sessionpredictor']))
                                     <option value="6" $r20>6</option>
                                     <option value="7" $r21>7</option>
                                 </select>
+                            <label style='width:250px'>Start Time : $r7</label>
                             <br>
                             <input type='text' style='width:40px' value='$r9'>
                             <input type='text' style='width:240px; $r15' value='$r4'>
